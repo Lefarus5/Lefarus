@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEFARUS - Your Life, Your Legacy</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;min-height:100vh;
+ background:#0b1020;color:white;
+ font-family:Arial,sans-serif;
+ display:flex;align-items:center;
+ justify-content:center;padding:20px
+}
+.container{
+ width:100%;max-width:420px;
+ background:#151e33;padding:30px;
+ border-radius:18px;
+ border:1px solid #293955;
+ text-align:center
+}
+.logo{font-size:34px;font-weight:bold;color:#d9ad62}
+.tagline{color:#aebbd0;margin-bottom:28px}
+h2{margin-bottom:20px}
+input{
+ width:100%;padding:15px;margin:9px 0;
+ border-radius:9px;border:1px solid #394967;
+ background:#0b1020;color:white;font-size:16px
+}
+button{
+ width:100%;padding:15px;margin-top:12px;
+ border:0;border-radius:9px;
+ background:#d9ad62;color:#101522;
+ font-weight:bold;font-size:16px
+}
+.switch{color:#d9ad62;cursor:pointer;margin-top:20px}
+#message{margin-top:15px;color:#f3cc83}
+#vault{display:none}
+.memory{
+ background:#202c43;padding:15px;
+ margin-top:12px;border-radius:10px;text-align:left
+}
+</style>
+</head>
+<body>
+<div class="container">
+ <div class="logo">LEFARUS</div>
+ <p class="tagline">Your Life. Your Memories. Your Legacy.</p>
+
+ <div id="auth">
+  <h2 id="heading">Create Your Account</h2>
+  <input id="email" type="email" placeholder="Your email address">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="authenticate()" id="mainBtn">Sign Up</button>
+  <p class="switch" onclick="toggleMode()" id="switchText">
+   Already have an account? Login
+  </p>
+ </div>
+
+ <div id="vault">
+  <h2>Welcome to Your Memory Vault</h2>
+  <p>Your memories belong to you.</p>
+  <input id="title" placeholder="Memory title">
+  <input id="content" placeholder="Write your memory">
+  <button onclick="saveMemory()">Save Memory</button>
+  <div id="memories"></div>
+  <button onclick="logout()">Logout</button>
+ </div>
+ <p id="message"></p>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ybygtueqiujocrjghrgm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_S3W3VQnZ_ny49lvFOnSAcQ_D8oSNZGl";
+
+const db = window.supabase.createClient(
+ SUPABASE_URL, SUPABASE_KEY
+);
+
+let signupMode = true;
+
+function toggleMode(){
+ signupMode = !signupMode;
+ document.getElementById("heading").textContent =
+ signupMode ? "Create Your Account" : "Welcome Back";
+ document.getElementById("mainBtn").textContent =
+ signupMode ? "Sign Up" : "Login";
+ document.getElementById("switchText").textContent =
+ signupMode ? "Already have an account? Login" :
+ "New here? Create an account";
+ document.getElementById("message").textContent = "";
+}
+
+async function authenticate(){
+ const email = document.getElementById("email").value.trim();
+ const password = document.getElementById("password").value;
+ const msg = document.getElementById("message");
+
+ if(!email || !password){
+  msg.textContent = "Enter your email and password.";
+  return;
+ }
+
+ msg.textContent = "Please wait...";
+
+ const result = signupMode
+  ? await db.auth.signUp({email,password})
+  : await db.auth.signInWithPassword({email,password});
+
+ if(result.error){
+  msg.textContent = result.error.message;
+  return;
+ }
+
+ if(signupMode && !result.data.session){
+  msg.textContent = "Account created! Check your email to confirm.";
+  return;
+ }
+
+ msg.textContent = "Success!";
+ showVault();
+}
+
+async function showVault(){
+ document.getElementById("auth").style.display="none";
+ document.getElementById("vault").style.display="block";
+ await loadMemories();
+}
+
+async function saveMemory(){
+ const title = document.getElementById("title").value.trim();
+ const content = document.getElementById("content").value.trim();
+ const msg = document.getElementById("message");
+
+ if(!title || !content){
+  msg.textContent="Enter a title and memory.";
+  return;
+ }
+
+ const {data:{user}} = await db.auth.getUser();
+ const {error} = await db.from("memories").insert({
+  user_id:user.id,title,content
+ });
+
+ if(error){
+  msg.textContent=error.message;
+  return;
+ }
+
+ document.getElementById("title").value="";
+ document.getElementById("content").value="";
+ msg.textContent="Memory saved!";
+ await loadMemories();
+}
+
+async function loadMemories(){
+ const {data:{user}} = await db.auth.getUser();
+ const {data,error} = await db.from("memories")
+  .select("*").eq("user_id",user.id)
+  .order("created_at",{ascending:false});
+
+ if(error){
+  document.getElementById("message").textContent=error.message;
+  return;
+ }
+
+ document.getElementById("memories").innerHTML="";
+ data.forEach(item=>{
+  const card=document.createElement("div");
+  card.className="memory";
+  const heading=document.createElement("strong");
+  heading.textContent=item.title;
+  const paragraph=document.createElement("p");
+  paragraph.textContent=item.content;
+  card.append(heading,paragraph);
+  document.getElementById("memories").appendChild(card);
+ });
+}
+
+async function logout(){
+ await db.auth.signOut();
+ location.reload();
+}
+
+db.auth.getSession().then(({data})=>{
+ if(data.session) showVault();
+});
+</script>
+</body>
+</html>
